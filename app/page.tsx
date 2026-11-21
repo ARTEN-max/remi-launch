@@ -1,6 +1,7 @@
 import { Faq } from "@/components/faq";
 import { FounderNote } from "@/components/founder-note";
 import { HowItWorks } from "@/components/how-it-works";
+import { InterviewShort } from "@/components/interview-short";
 import { SignupForm } from "@/components/signup-form";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -52,10 +53,13 @@ export default function Page() {
               Remi is an AI voice you talk to like a friend. It holds what you share for months and
               years, checks in, and brings back the detail you mentioned once.
             </p>
-            <p className="mt-5 hidden max-w-md text-sm leading-relaxed text-muted-foreground lg:block">
-              Three weeks after you mention an interview, it asks if you heard back. That&apos;s the
-              whole idea.
-            </p>
+            <div className="mt-5 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+              <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
+                Three weeks after you mention an interview, it asks if you heard back. That&apos;s the
+                whole idea.
+              </p>
+              <InterviewShort />
+            </div>
           </div>
           <SignupForm />
         </section>
