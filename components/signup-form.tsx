@@ -6,7 +6,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { referralPath, whatsAppShareUrl, xShareUrl } from "@/lib/share";
+import { referralPath, shareMessage, sharePayload, smsShareUrl, whatsAppShareUrl, xShareUrl } from "@/lib/share";
 import type { FieldName, JoinSuccess } from "@/lib/types";
 import { parseJoinInput } from "@/lib/validate";
 import { cn } from "cn";
@@ -115,15 +115,17 @@ export function SignupForm() {
   const handleId = useId();
   const rememberId = useId();
   const errorId = useId();
+  const notePanelId = useId();
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [field, setField] = useState<FieldName | null>(null);
+  const [noteOpen, setNoteOpen] = useState(false);
   const [memorySpot, setMemorySpot] = useState<CachedSpot | null>(null);
   const storedSpot = useSyncExternalStore(subscribeSpot, readCache, () => null);
   const spot = storedSpot ?? memorySpot;
   const friendRef = useSyncExternalStore(subscribeSearch, readFriendRef, () => null);
-  const [copied, setCopied] = useState(false);
   const skipRefresh = useRef(false);
+  const noteVisible = noteOpen || field === "xHandle" || field === "remember";
 
   useEffect(() => {
     const email = spot?.email;
@@ -163,7 +165,16 @@ export function SignupForm() {
     setStatus("idle");
     setError(null);
     setField(null);
-    setCopied(false);
+    setNoteOpen(false);
+  }
+
+  function toggleNote() {
+    const visible = noteOpen || field === "xHandle" || field === "remember";
+    setNoteOpen(!visible);
+    if (field === "xHandle" || field === "remember") {
+      setField(null);
+      setError(null);
+    }
   }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -230,7 +241,7 @@ export function SignupForm() {
       className="scroll-mt-24 rounded-3xl border border-border border-t-4 border-t-primary bg-card p-4 shadow-[0_24px_50px_-28px_rgba(80,40,10,0.55)] sm:p-6"
     >
       {spot ? (
-        <SuccessCard spot={spot} copied={copied} onCopy={setCopied} onReset={resetForm} />
+        <SuccessCard spot={spot} onReset={resetForm} />
       ) : status === "quiet" ? (
         <div>
           <h2 className="font-heading text-2xl tracking-tight">You&apos;re on the list.</h2>
@@ -267,39 +278,50 @@ export function SignupForm() {
                 className="h-12 px-3 text-base md:text-base"
               />
             </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor={handleId}>
-                X handle <span className="font-normal text-muted-foreground">(optional)</span>
-              </Label>
-              <Input
-                id={handleId}
-                name="xHandle"
-                autoComplete="off"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                placeholder="@you"
-                maxLength={16}
-                aria-invalid={field === "xHandle"}
-                aria-describedby={field === "xHandle" ? errorId : undefined}
-                className="h-12 px-3 text-base md:text-base"
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor={rememberId}>
-                What would you want Remi to remember?{" "}
-                <span className="font-normal text-muted-foreground">(optional)</span>
-              </Label>
-              <Textarea
-                id={rememberId}
-                name="remember"
-                rows={2}
-                maxLength={500}
-                placeholder="My sister's recital is June 14. I have an interview Thursday."
-                aria-invalid={field === "remember"}
-                aria-describedby={field === "remember" ? errorId : undefined}
-                className="min-h-20 px-3 py-3 text-base md:text-base"
-              />
+            <button
+              type="button"
+              className="justify-self-start text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              aria-expanded={noteVisible}
+              aria-controls={notePanelId}
+              onClick={toggleNote}
+            >
+              {noteVisible ? "Hide note" : "Add a note…"}
+            </button>
+            <div id={notePanelId} className={noteVisible ? "grid gap-3" : "hidden"}>
+              <div className="grid gap-1.5">
+                <Label htmlFor={handleId}>
+                  X handle <span className="font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <Input
+                  id={handleId}
+                  name="xHandle"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder="@you"
+                  maxLength={16}
+                  aria-invalid={field === "xHandle"}
+                  aria-describedby={field === "xHandle" ? errorId : undefined}
+                  className="h-12 px-3 text-base md:text-base"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor={rememberId}>
+                  What would you want Remi to remember?{" "}
+                  <span className="font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <Textarea
+                  id={rememberId}
+                  name="remember"
+                  rows={2}
+                  maxLength={500}
+                  placeholder="My sister's recital is June 14. I have an interview Thursday."
+                  aria-invalid={field === "remember"}
+                  aria-describedby={field === "remember" ? errorId : undefined}
+                  className="min-h-20 px-3 py-3 text-base md:text-base"
+                />
+              </div>
             </div>
           </div>
 
@@ -332,32 +354,42 @@ export function SignupForm() {
   );
 }
 
-function SuccessCard({
-  spot,
-  copied,
-  onCopy,
-  onReset,
-}: {
-  spot: CachedSpot;
-  copied: boolean;
-  onCopy: (copied: boolean) => void;
-  onReset: () => void;
-}) {
+function SuccessCard({ spot, onReset }: { spot: CachedSpot; onReset: () => void }) {
   const link = `${window.location.origin}${referralPath(spot.code)}`;
+  const message = shareMessage(link);
+  const [copied, setCopied] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
   const friends =
     spot.referralCount === 0
-      ? "No one has used your link yet."
+      ? "no one has joined with your link yet"
       : spot.referralCount === 1
-        ? "1 friend has used your link."
-        : `${spot.referralCount} friends have used your link.`;
+        ? "1 friend has joined with your link"
+        : `${spot.referralCount} friends have joined with your link`;
 
-  async function copy() {
+  async function copyMessage(fromShare = false) {
     try {
-      await navigator.clipboard.writeText(link);
-      onCopy(true);
+      await navigator.clipboard.writeText(message);
+      setCopied(true);
+      setShareCopied(fromShare);
+      return true;
     } catch {
-      onCopy(false);
+      setCopied(false);
+      setShareCopied(false);
+      return false;
     }
+  }
+
+  async function share() {
+    const payload = sharePayload(link);
+    if (canWebShare(payload)) {
+      try {
+        await navigator.share(payload);
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    }
+    await copyMessage(true);
   }
 
   return (
@@ -366,11 +398,10 @@ function SuccessCard({
       <h2 id="your-spot" tabIndex={-1} className="mt-2 font-heading text-6xl tracking-tight">
         #{spot.position}
       </h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        of {spot.total} in line. {friends}
-      </p>
-      <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-        Each person who joins with your link moves you ahead of everyone still at zero.
+      <p className="mt-4 text-sm font-medium leading-relaxed">Share your link to move up the list.</p>
+      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+        You&apos;re #{spot.position} of {spot.total}, and {friends}. Each person who joins with it
+        moves you ahead of everyone still at zero.
       </p>
 
       <label className="mt-4 grid gap-1.5 text-sm font-medium" htmlFor="referral-link">
@@ -384,35 +415,53 @@ function SuccessCard({
         />
       </label>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
-        <a
-          href={xShareUrl(link)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-11")}
-        >
-          Post on X
-        </a>
-        <a
-          href={whatsAppShareUrl(link)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-11")}
-        >
-          WhatsApp
-        </a>
-        <Button type="button" variant="outline" className="h-11" onClick={() => void copy()}>
-          {copied ? (
+      <div className="mt-3 grid gap-2">
+        <Button type="button" className="h-12 text-base" onClick={() => void share()}>
+          {shareCopied ? (
             <>
               <Check /> Copied
             </>
           ) : (
-            "Copy link"
+            "Share your link"
           )}
         </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <a
+            href={smsShareUrl(link)}
+            aria-label="Text or iMessage"
+            className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-11")}
+          >
+            Text
+          </a>
+          <Button type="button" variant="outline" className="h-11" onClick={() => void copyMessage()}>
+            {copied ? (
+              <>
+                <Check /> Copied
+              </>
+            ) : (
+              "Copy message"
+            )}
+          </Button>
+          <a
+            href={xShareUrl(link)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-11")}
+          >
+            Post on X
+          </a>
+          <a
+            href={whatsAppShareUrl(link)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-11")}
+          >
+            WhatsApp
+          </a>
+        </div>
       </div>
       <p className="sr-only" aria-live="polite">
-        {copied ? "Referral link copied." : ""}
+        {copied ? "Message and referral link copied." : ""}
       </p>
       <button
         type="button"
@@ -423,4 +472,14 @@ function SuccessCard({
       </button>
     </div>
   );
+}
+
+function canWebShare(data: ShareData): boolean {
+  if (typeof navigator === "undefined" || typeof navigator.share !== "function") return false;
+  if (typeof navigator.canShare !== "function") return true;
+  try {
+    return navigator.canShare(data);
+  } catch {
+    return false;
+  }
 }
